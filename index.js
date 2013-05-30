@@ -16,7 +16,7 @@ var MemcachedSession = function(Mc, config) {
   this.req = null;
   this.session_id = null;
   this.sessions = {};
-  this.cookies = new Array();
+  this.cookies = {};
   this.ses_updated = false;
   this.cookie_prefix = config.prefix || '';
   this.cookie_ttl = config.cookie_ttl || 2419200;
@@ -29,15 +29,18 @@ var MemcachedSession = function(Mc, config) {
   loadSession = function loadSession(cb) {
     if (self.hasCookie('session')) {
       self.session_id = self.getCookie('session');
-
-      self.Mc.get(this.session_id, function(resp) {
+      self.Mc.get(self.session_id, function(resp) {
         if (resp === false) {
+          console.log('Session not valid');
           createSession(cb);
         } else {
+          console.log('Session valid', resp);
           self.sessions = resp;
+          handleCallback(undefined, resp, cb);
         }
       });
     } else {
+      console.log('New session');
       createSession(cb);
     }
   }
@@ -88,6 +91,9 @@ var MemcachedSession = function(Mc, config) {
     }
   }
 
+  prefixCookieName = function prefixCookieName(name) {
+    return self.cookie_prefix + '[' + name + ']';
+  }
 }
 
 // Start session handling and load sessions into this.sessions obj
@@ -98,8 +104,8 @@ MemcachedSession.prototype.start = function start(req, resp, cb) {
 
   this.resp = resp;
   this.req = req;
-  loadSession(cb);
   parseCookies(req);
+  loadSession(cb);
 }
 
 // Not implemented. Simons fault
@@ -158,6 +164,7 @@ MemcachedSession.prototype.destroyCookies = function destroyCookies() {
 
 // Get cookie by name. If name doesn't exist, throw error
 MemcachedSession.prototype.getCookie = function getCookie(name) {
+  name = prefixCookieName(name);
   if ( ! this.cookies[name]) {
     throw new Error('INVALID_COOKIE_NAME');
   }
@@ -167,6 +174,8 @@ MemcachedSession.prototype.getCookie = function getCookie(name) {
 
 // check if a cookie exists, returns bool
 MemcachedSession.prototype.hasCookie = function hasCookie(name) {
+  name = prefixCookieName(name);
+
   if (this.cookies[name]) {
     return true;
   }
@@ -182,17 +191,17 @@ MemcachedSession.prototype.setCookie = function setCookie(
     throw new Error('COOKIE_NO_NAME');
   }
 
-  name = this.cookie_prefix+'['+name+']';
-  var date = new Date(Date.now + ttl);
+  name = prefixCookieName(name);
+
+  var ttl = (ttl || this.cookie_ttl) * 1000;
+  var date = new Date(Date.now() + ttl);
   var domain = domain || this.req.headers.host.replace(new RegExp(':[0-9]*'), '');
-  //this.def_domain;
-  var ttl = ttl || this.cookie_ttl;
 
   var cookie = [
     name+'='+value,
-    'Expires='+date,
+    'Expires='+date.toGMTString(),
     'Path=/',
-    'Domain='+domain,
+    //'Domain='+domain,
     'HttpOnly'
   ].join(';')
 
