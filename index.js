@@ -32,6 +32,7 @@ var MemcachedSession = function(Mc, config) {
       self.Mc.get(self.session_id, function(resp) {
         if (resp === false) {
           console.log('Session not valid');
+          handleCallback(undefined, resp, cb);
           createSession(cb);
         } else {
           console.log('Session valid', resp);
@@ -195,13 +196,13 @@ MemcachedSession.prototype.setCookie = function setCookie(
 
   var ttl = (ttl || this.cookie_ttl) * 1000;
   var date = new Date(Date.now() + ttl);
-  var domain = domain || this.req.headers.host.replace(new RegExp(':[0-9]*'), '');
+  var domain = domain || this.def_domain;
 
   var cookie = [
     name+'='+value,
     'Expires='+date.toGMTString(),
     'Path=/',
-    //'Domain='+domain,
+    'Domain='+domain,
     'HttpOnly'
   ].join(';')
 
