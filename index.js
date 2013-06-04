@@ -32,7 +32,6 @@ var MemcachedSession = function(Mc, config) {
       self.Mc.get(self.session_id, function(resp) {
         if (resp === false) {
           console.log('Session not valid');
-          handleCallback(undefined, resp, cb);
           createSession(cb);
         } else {
           console.log('Session valid', resp);
