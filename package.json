@@ -6,6 +6,7 @@
     "name": "Patrik Ring",
     "email": "me@patrikring.se"
   },
+  "private": true,
   "keywords": [
     "sessions",
     "session",
