@@ -25,7 +25,7 @@ var MemcachedSession = function(Mc, config) {
   this.def_domain = config.domain || '';
 
   var self = this;
-}
+};
 
 var obj = MemcachedSession.prototype;
 //
@@ -46,17 +46,17 @@ obj.start = function start(req, resp, cb) {
   this.req = req;
   this._parseCookies(req);
   this._loadSession(cb);
-}
+};
 
 // Not implemented. Simons fault
-obj.end = function end() {}
+obj.end = function end() {};
 
 // DESTROY (removes all sessions and unsets the session cookie)
 obj.destroy = function destroy() {
   this.sessions = {};
   this.removeCookie('session');
   this.Mc.remove(this.session_id, function(err, resp) {});
-}
+};
 
 // Get a session by key name
 // Will throw exception if session does not exist
@@ -69,7 +69,7 @@ obj.get = function get(name) {
   }
 
   return this.sessions[name];
-}
+};
 
 // Check if a session exists
 obj.has = function has(name) {
@@ -78,17 +78,17 @@ obj.has = function has(name) {
   }
 
   return false;
-}
+};
 
 obj.set = function set(name, value, cb) {
   this.sessions[name] = value;
   this._saveSessions(cb);
-}
+};
 
 obj.remove = function remove(name, cb) {
   delete this.sessions[name];
   this._saveSessions(cb);
-}
+};
 
 // Remove all cookies, on multiple domains,
 // that are affiliated with bloglovin
@@ -96,11 +96,11 @@ obj.destroyCookies = function destroyCookies() {
   // Get current domain but strip out port
   var domain = this.req.headers.host.replace(new RegExp(':[0-9]*'), '');
 
-  for (key in this.cookies) {
+  for (var key in this.cookies) {
     this.removeCookie(key, domain);
     this.removeCookie(key);
   }
-}
+};
 
 // Get cookie by name. If name doesn't exist, throw error
 obj.getCookie = function getCookie(name) {
@@ -111,7 +111,7 @@ obj.getCookie = function getCookie(name) {
   }
 
   return this.cookies[name];
-}
+};
 
 // check if a cookie exists, returns bool
 obj.hasCookie = function hasCookie(name) {
@@ -122,7 +122,7 @@ obj.hasCookie = function hasCookie(name) {
   }
 
   return false;
-}
+};
 
 // Set a cookie, add it to the response headers
 obj.setCookie = function setCookie(name, value, ttl, domain) {
@@ -132,9 +132,9 @@ obj.setCookie = function setCookie(name, value, ttl, domain) {
 
   name = this._prefixCookieName(name);
 
-  var ttl = (ttl || this.cookie_ttl) * 1000;
+  ttl = (ttl || this.cookie_ttl) * 1000;
+  domain = domain || this.def_domain;
   var date = new Date(Date.now() + ttl);
-  var domain = domain || this.def_domain;
 
   var cookie = [
     name+'='+value,
@@ -142,19 +142,20 @@ obj.setCookie = function setCookie(name, value, ttl, domain) {
     'Path=/',
     'Domain='+domain,
     'HttpOnly'
-  ].join(';')
+  ].join(';');
 
   this.cookies[name] = value;
 
   // Get cookies already set in this reponse
   cookies_set = this.resp.getHeader('set-cookie');
 
+  var tmp_cookie;
   if (typeof(cookies_set) != 'object') {
     if (cookies_set) {
-      var tmp_cookie = cookies_set;
+      tmp_cookie = cookies_set;
     }
     
-    cookies_set = new Array();
+    cookies_set = [];
   } 
     
   cookies_set.push(cookie);
@@ -165,14 +166,14 @@ obj.setCookie = function setCookie(name, value, ttl, domain) {
 
   // Set the header again
   this.resp.setHeader('Set-Cookie', cookies_set);
-}
+};
 
 // Remove a cookie by setting it to an empty value with expiration now
 obj.removeCookie = function removeCookie(name, domain) {
-  var domain = domain || this.def_domain;
+  domain = domain || this.def_domain;
 
   this.setCookie(name, '', -86400, domain);  
-}
+};
 
 //
 // Private methods
@@ -194,7 +195,7 @@ obj._loadSession = function _loadSession(cb) {
   } else {
     this._createSession(cb);
   }
-}
+};
 
 // Generates a random ses id and sets a cookie
 obj._createSession = function _createSession(cb) {
@@ -209,7 +210,7 @@ obj._createSession = function _createSession(cb) {
     this.setCookie('session', this.session_id, this.session_ttl);
     cb(err, resp);
   });
-}
+};
 
 // Store sessions in memcached
 obj._saveSessions = function _saveSessions(cb) {
@@ -223,19 +224,19 @@ obj._saveSessions = function _saveSessions(cb) {
 
     handleCallback(undefined, resp, cb);
   });
-}
+};
 
 // Parse cookies from request and populate the cookies object
 obj._parseCookies = function _parseCookies(req) {
   var self = this;
 
-  req.headers.cookie &&
-  req.headers.cookie.split(';').forEach(function (cookie) {
-    var parts = cookie.split('=');
-
-    self.cookies[ parts[ 0 ].trim() ] = ( parts[ 1 ] || '' ).trim();
-  });
-}
+  if (req.headers.cookie) {
+    req.headers.cookie.split(';').forEach(function (cookie) {
+      var parts = cookie.split('=');
+      self.cookies[ parts[ 0 ].trim() ] = ( parts[ 1 ] || '' ).trim();
+    });
+  }
+};
 
 // Callback wrapper, make sure it's a function
 obj._handleCallback = function _handleCallback(err, resp, cb) {
@@ -244,14 +245,15 @@ obj._handleCallback = function _handleCallback(err, resp, cb) {
   } else {
     throw new Error('NO_CALLBACK');
   }
-}
+};
 
 // Return prefixed string
 obj._prefixCookieName = function _prefixCookieName(name) {
   return this.cookie_prefix + '[' + name + ']';
-}
+};
 
 // Return a new session handler
 module.exports = function (Mc, config) {
   return new MemcachedSession(Mc, config);
-}
+};
+
