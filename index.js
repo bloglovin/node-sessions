@@ -181,15 +181,16 @@ obj.removeCookie = function removeCookie(name, domain) {
 
 // Look for cookie, if exists, load sessions from mc
 obj._loadSession = function _loadSession(cb) {
+  var self = this;
   if (this.hasCookie('session')) {
     this.session_id = this.version + '::' + this.getCookie('session');
     
     this.Mc.get(this.session_id, function(resp) {
       if (resp === false) {
-        this._createSession(cb);
+        self._createSession(cb);
       } else {
-        this.sessions = resp;
-        this._handleCallback(undefined, resp, cb);
+        self.sessions = resp;
+        self._handleCallback(undefined, resp, cb);
       }
     });
   } else {
