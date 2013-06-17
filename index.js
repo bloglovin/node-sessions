@@ -18,6 +18,7 @@ var MemcachedSession = function(Mc, config) {
   this.sessions = {};
   this.cookies = {};
   this.ses_updated = false;
+  this.version = config.version || 2;
   this.cookie_prefix = config.prefix || '';
   this.cookie_ttl = config.cookie_ttl || 2419200;
   this.session_ttl = config.session_ttl || 86400;
@@ -180,7 +181,7 @@ obj.removeCookie = function removeCookie(name, domain) {
 // Look for cookie, if exists, load sessions from mc
 obj._loadSession = function _loadSession(cb) {
   if (this.hasCookie('session')) {
-    this.session_id = this.getCookie('session');
+    this.session_id = this.version + '::' + this.getCookie('session');
     
     this.Mc.get(this.session_id, function(resp) {
       if (resp === false) {
