@@ -1,7 +1,7 @@
 {
   "name": "session-handler",
   "description": "A simple session and cookie handler",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": {
     "name": "Patrik Ring",
     "email": "me@patrikring.se"
