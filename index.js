@@ -200,6 +200,7 @@ obj._loadSession = function _loadSession(cb) {
 
 // Generates a random ses id and sets a cookie
 obj._createSession = function _createSession(cb) {
+  var self = this;
   this.session_id = 'ses_' + uuid.v1() + uuid.v4();
 
   this.set('session_id', this.session_id, function(err, resp) {
@@ -208,13 +209,14 @@ obj._createSession = function _createSession(cb) {
       return;
     }
 
-    this.setCookie('session', this.session_id, this.session_ttl);
+    self.setCookie('session', self.session_id, self.session_ttl);
     cb(err, resp);
   });
 };
 
 // Store sessions in memcached
 obj._saveSessions = function _saveSessions(cb) {
+  var self = this;
   this.Mc.set(this.session_id, this.sessions, this.session_ttl, function(resp) {
     if (resp === false) {
       var error = new Error('SESSION_SAVE_FAILED');
@@ -223,7 +225,7 @@ obj._saveSessions = function _saveSessions(cb) {
       return;
     }
 
-    handleCallback(undefined, resp, cb);
+    self._handleCallback(undefined, resp, cb);
   });
 };
 
