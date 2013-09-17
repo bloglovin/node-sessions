@@ -16,8 +16,7 @@
     "uuid": ">=1.4.1"
   },
   "devDependencies": {
-    "mocha": "0.3.x",
-    "memcached-wrapper": "https://github.com/bloglovin/node-memcached-wrapper/tarball/v0.0.2"
+    "mocha": "0.3.x"
   },
   "main": "./index.js",
   "engines": {
