@@ -201,7 +201,7 @@ obj._loadSession = function _loadSession(cb) {
 // Generates a random ses id and sets a cookie
 obj._createSession = function _createSession(cb) {
   var self = this;
-  this.session_id = 'ses_' + uuid.v1() + uuid.v4();
+  this.session_id = this.version + '::ses_' + uuid.v1() + uuid.v4();
 
   this.set('session_id', this.session_id, function(err, resp) {
     if (err) {
