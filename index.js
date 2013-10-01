@@ -221,7 +221,7 @@ obj._saveSessions = function _saveSessions(cb) {
     if (resp === false) {
       var error = new Error('SESSION_SAVE_FAILED');
       error.http_code = 503;
-      handleCallback(error, resp, cb);
+      self._handleCallback(error, resp, cb);
       return;
     }
 
