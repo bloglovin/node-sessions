@@ -1,262 +1,287 @@
-// @fileoverview Session handler
+//
+// # Session
+//
 
-// Depends on uuid
-var uuid = require('uuid');
+/* jslint node: true */
+'use strict';
 
-/**
- * MemcachedSession
- * A simple session and cookie handler for raw node
- *
- * @param Mc
- * @param obj config
- */
-var MemcachedSession = function(Mc, config) {
-  this.Mc = Mc;
-  this.resp = null;
-  this.req = null;
-  this.session_id = null;
-  this.sessions = {};
-  this.cookies = {};
-  this.ses_updated = false;
-  this.version = config.version || 2;
-  this.cookie_prefix = config.prefix || '';
-  this.cookie_ttl = config.cookie_ttl || 2419200;
-  this.session_ttl = config.session_ttl || 86400;
-  this.def_domain = config.domain || '';
+var assert = require('assert');
+var uuid   = require('uuid');
+
+//
+// ## Setup Session
+//
+// Prepares a new session.
+//
+// The cookie setting and getting is abstracted from this module to allow it to
+// be used in different environments. Hence the `cookieX` options below are
+// required.
+//
+// * **mc**, an instance of `bloglovin-memcached-sharder`.
+// * **opts**, an options object containing:
+//  * **version**, the session version.
+//  * **prefix**, cookie prefix.
+//  * **sessionTTL**, how long a session should be valid.
+//  * **cookieSetter**, a function that takes two arguments; name and value.
+//    This function should save a cookie with the given name and value. This
+//    option is **required**.
+//  * **cookieRemover**, a function that takes the name of a cookie to destroy.
+//    This option is **required**.
+//  * **autoSave**, if true each set triggers a set in memcached. Otherwise
+//    sessions are not persisted until `.save()` or `.end()` is called.
+//
+var Session = module.exports = function Session(mc, opts) {
+  opts = opts || {};
+
+  this.mc            = mc;
+  this.sessionID     = null;
+  this.data          = {};
+  this.changed       = false;
+  this.version       = opts.version || 2;
+  this.cookiePrefix  = opts.prefix || '';
+  this.cookieSetter  = opts.cookieSetter || false;
+  this.cookieRemover = opts.cookieRemover || false;
+  this.sessionTTL    = opts.sessionTTL || 86400;
+  this.autoSave      = opts.autoSave || false;
+  this.noop          = function () {};
+
+  assert(this.mc, 'Missing memcached connection.');
+  assert(this.cookieSetter, 'Missing required `cookieSetter` function.');
+  assert(this.cookieRemover, 'Missing required `cookieRemover` function.');
+
+};
+
+//
+// ## Start Session
+//
+// Starts a session. Checks cookie for existing one, otherwise creates a new
+// session unless `create` is set to false.
+//
+// * **cookies**, an object containing the parsed cookies of a request.
+// * **create**, boolean that determines wether or not to force creation of
+//   new sessions should one not already exist for the user.
+// * **next**, callback.
+//
+Session.prototype.start = function start(cookies, create, next) {
+  var cookieName = this._prefixCookie('session');
+  var session    = cookies[cookieName];
+
+  if (!session && !create) {
+    next(new Error('No session cookie found.'));
+    return;
+  }
+  else if (!session && create) {
+    this.create(next);
+    return;
+  }
 
   var self = this;
-};
-
-var obj = MemcachedSession.prototype;
-//
-// Public methods
-// 
-// start, end, destroy, has, get, set, remove,
-// getCookie, setCookie, hasCookie, removeCookie,
-// destroyCookies
-//
-
-// Start session handling and load sessions into this.sessions obj
-obj.start = function start(req, resp, cb) {
-  if ( ! req || ! resp) {
-    throw new Error('MISSING_ARGUMENTS');
-  }
-
-  this.resp = resp;
-  this.req = req;
-  this._parseCookies(req);
-  this._loadSession(cb);
-};
-
-// Not implemented. Simons fault
-obj.end = function end() {};
-
-// DESTROY (removes all sessions and unsets the session cookie)
-obj.destroy = function destroy() {
-  this.sessions = {};
-  this.removeCookie('session');
-  this.Mc.remove(this.session_id, function(err, resp) {});
-};
-
-// Get a session by key name
-// Will throw exception if session does not exist
-// Use has()!
-obj.get = function get(name) {
-  if ( ! this.sessions[name]) {
-    var error = new Error('INVALID_SESSION_NAME');
-    error.http_code = 400;
-    throw error;
-  }
-
-  return this.sessions[name];
-};
-
-// Check if a session exists
-obj.has = function has(name) {
-  if (this.sessions[name]) {
-    return true;
-  }
-
-  return false;
-};
-
-obj.set = function set(name, value, cb) {
-  this.sessions[name] = value;
-  this._saveSessions(cb);
-};
-
-obj.remove = function remove(name, cb) {
-  delete this.sessions[name];
-  this._saveSessions(cb);
-};
-
-// Remove all cookies, on multiple domains,
-// that are affiliated with bloglovin
-obj.destroyCookies = function destroyCookies() {
-  // Get current domain but strip out port
-  var domain = this.req.headers.host.replace(new RegExp(':[0-9]*'), '');
-
-  for (var key in this.cookies) {
-    this.removeCookie(key, domain);
-    this.removeCookie(key);
-  }
-};
-
-// Get cookie by name. If name doesn't exist, throw error
-obj.getCookie = function getCookie(name) {
-  name = this._prefixCookieName(name);
-
-  if ( ! this.cookies[name]) {
-    throw new Error('INVALID_COOKIE_NAME');
-  }
-
-  return this.cookies[name];
-};
-
-// check if a cookie exists, returns bool
-obj.hasCookie = function hasCookie(name) {
-  name = this._prefixCookieName(name);
-
-  if (this.cookies[name]) {
-    return true;
-  }
-
-  return false;
-};
-
-// Set a cookie, add it to the response headers
-obj.setCookie = function setCookie(name, value, ttl, domain) {
-  if ( ! name || typeof value == 'undefined') {
-    throw new Error('COOKIE_NO_NAME');
-  }
-
-  name = this._prefixCookieName(name);
-
-  ttl = (ttl || this.cookie_ttl) * 1000;
-  domain = domain || this.def_domain;
-  var date = new Date(Date.now() + ttl);
-
-  var cookie = [
-    name+'='+value,
-    'Expires='+date.toGMTString(),
-    'Path=/',
-    'Domain='+domain,
-    'HttpOnly'
-  ].join(';');
-
-  this.cookies[name] = value;
-
-  // Get cookies already set in this reponse
-  cookies_set = this.resp.getHeader('set-cookie');
-
-  var tmp_cookie;
-  if (typeof(cookies_set) != 'object') {
-    if (cookies_set) {
-      tmp_cookie = cookies_set;
+  this.sessionID = this.version + '::' + session;
+  this.mc.get(this.sessionID, function sessionLoadCallback(sess) {
+    if (!sess && !create) {
+      next(new Error('No session found.'));
+      return;
     }
-    
-    cookies_set = [];
-  } 
-    
-  cookies_set.push(cookie);
-  
-  if (tmp_cookie) {
-    cookies_set.push(tmp_cookie);  
-  }
-
-  // Set the header again
-  this.resp.setHeader('Set-Cookie', cookies_set);
-};
-
-// Remove a cookie by setting it to an empty value with expiration now
-obj.removeCookie = function removeCookie(name, domain) {
-  domain = domain || this.def_domain;
-
-  this.setCookie(name, '', -86400, domain);  
-};
-
-//
-// Private methods
-//
-
-// Look for cookie, if exists, load sessions from mc
-obj._loadSession = function _loadSession(cb) {
-  var self = this;
-  if (this.hasCookie('session')) {
-    this.session_id = this.version + '::' + this.getCookie('session');
-    
-    this.Mc.get(this.session_id, function(resp) {
-      if (resp === false) {
-        self._createSession(cb);
-      } else {
-        self.sessions = resp;
-        self._handleCallback(undefined, resp, cb);
-      }
-    });
-  } else {
-    this._createSession(cb);
-  }
-};
-
-// Generates a random ses id and sets a cookie
-obj._createSession = function _createSession(cb) {
-  var self = this;
-  this.session_id = this.version + '::ses_' + uuid.v1() + uuid.v4();
-
-  this.set('session_id', this.session_id, function(err, resp) {
-    if (err) {
-      cb(err, resp);
+    else if (!sess && create) {
+      self.create(next);
       return;
     }
 
-    self.setCookie('session', self.session_id, self.session_ttl);
-    cb(err, resp);
+    self.data = sess;
+    next(null);
   });
 };
 
-// Store sessions in memcached
-obj._saveSessions = function _saveSessions(cb) {
+//
+// ## Create Session
+//
+// Creates a new session by generating a session id and storing it in
+// memcached.
+//
+// * **next**, optional callback passed to `.save()` if `autoSave` is enabled.
+//
+Session.prototype.create = function create(next) {
+  this.sessionID = this.version + '::' + uuid.v1() + uuid.v4();
+  this.cookieSetter(this._prefixCookie('session'), this.sessionID);
+  this.changed = true;
+  if (this.autoSave) {
+    this.save(next);
+  }
+  else {
+    next();
+  }
+};
+
+//
+// ## Save Session
+//
+// Persists session data to memcached.
+//
+// * **next**, function called when done or on error.
+//
+Session.prototype.save = function save(next) {
   var self = this;
-  this.Mc.set(this.session_id, this.sessions, this.session_ttl, function(resp) {
-    if (resp === false) {
-      var error = new Error('SESSION_SAVE_FAILED');
-      error.http_code = 503;
-      self._handleCallback(error, resp, cb);
-      return;
+  var callback = this._mcNext(true, function (err, response) {
+    if (!err) self.changed = false;
+    next(err, response);
+  });
+  this.mc.set(this.sessionID, this.data, this.sessionTTL, callback);
+};
+
+//
+// ## End Session
+//
+// Ending a session is not the same as destroying. This function only signifies
+// the end of one request. Call this function when your response has been
+// sent to the user or similar.
+//
+// The session will be saved.
+//
+Session.prototype.end = function end(next) {
+  if (this.changed) {
+    this.save(next);
+  }
+  else {
+    if (next) next();
+  }
+};
+
+//
+// ## Destroy Session
+//
+// Destroys a session by removing all data from memcached and removing the
+// cookie.
+//
+// * **next**, function called when done or on error.
+//
+Session.prototype.destroy = function destroy(next) {
+  this.data = {};
+  this.cookieRemover(this._prefixCookie('session'));
+  this.mc.remove(this.sessionID, this._mcNext(true, next));
+};
+
+//
+// ## Has Session Item
+//
+// Checks whether or not the given `key` exists in the session.
+//
+// * **key**, key to check for.
+//
+// **Returns** a boolean.
+//
+Session.prototype.has = function has(key) {
+  return (typeof this.data[key] !== 'undefined');
+};
+
+//
+// ## Get Session Item
+//
+// Returns a session value based on the given `key`. If `key` is not found in
+// the session the optional `def` argument is returned instead.
+//
+// * **key**, the name of the value to return.
+// * **def**, a default value to return if `key` is missing.
+//
+// **Returns** a session item.
+//
+Session.prototype.get = function get(key, def) {
+  return this.has(key) ? this.data[key] : def;
+};
+
+//
+// ## Set Session Item
+//
+// Set a session value.
+//
+// If `autoSave` is true the set value will be persisted immediately.
+//
+// * **key**, the name of the item to set.
+// * **value**, the value to set.
+// * **next**, optional callback passed to `.save()` if `autoSave` is enabled.
+//
+Session.prototype.set = function set(key, value, next) {
+  this.data[key] = value;
+  this.changed = true;
+  if (this.autoSave) {
+    this.save(next);
+  }
+};
+
+//
+// ## Remove Session Item
+//
+// Removes a session value.
+//
+// If `autoSave` is true the change will be persisted immediately.
+//
+// * **key**, the name of the item to set.
+// * **next**, optional callback passed to `.save()` if `autoSave` is enabled.
+//
+Session.prototype.remove = function remove(key, next) {
+  delete(this.data[key]);
+  this.changed = true;
+  if (this.autoSave) {
+    this.save(next);
+  }
+};
+
+// --------------------------------------------------------------------------
+
+//
+// ## Prefix Cookie Name
+//
+// Returns the prefixed version of a cookie name.
+//
+// _Internal_
+//
+// * **name**, name of the cookie.
+//
+// **Returns** a string.
+//
+Session.prototype._prefixCookie = function _prefixCookie(name) {
+  if (this.cookiePrefix.length === 0) {
+    return name;
+  }
+
+  return this.cookiePrefix + '[' + name + ']';
+};
+
+//
+// ## Handle Memcached Callback
+//
+// The current memcached module implements some weird callback scheme where
+// there's no special argument for errors. There's either one error, falsey
+// value or the actual value. All in one argument, this function fixes that.
+//
+// * **falseIsError**, wether or not to treat false as an error.
+// * **fn**, a function to wrap in the error checking magic.
+//
+Session.prototype._mcNext = function _mcNext(falseIsError, fn) {
+  // Guard against optional callbacks not being defined.
+  if (!fn) {
+    fn = this.noop;
+  }
+
+  return function (response) {
+    if (response instanceof Error) {
+      fn(response, null);
     }
-
-    self._handleCallback(undefined, resp, cb);
-  });
+    else if (falseIsError && response === false) {
+      var err = new Error('Memcached request failed.');
+      fn(err, response);
+    }
+    else {
+      fn(null, response);
+    }
+  };
 };
 
-// Parse cookies from request and populate the cookies object
-obj._parseCookies = function _parseCookies(req) {
-  var self = this;
+// --------------------------------------------------------------------------
 
-  if (req.headers.cookie) {
-    req.headers.cookie.split(';').forEach(function (cookie) {
-      var parts = cookie.split('=');
-      self.cookies[ parts[ 0 ].trim() ] = ( parts[ 1 ] || '' ).trim();
-    });
-  }
-};
-
-// Callback wrapper, make sure it's a function
-obj._handleCallback = function _handleCallback(err, resp, cb) {
-  if (typeof(cb) == 'function') {
-    cb(err, resp);
-  } else {
-    throw new Error('NO_CALLBACK');
-  }
-};
-
-// Return prefixed string
-obj._prefixCookieName = function _prefixCookieName(name) {
-  return this.cookie_prefix + '[' + name + ']';
-};
-
-// Return a new session handler
-module.exports = function (Mc, config) {
-  return new MemcachedSession(Mc, config);
-};
+//
+// ## Hapi Integration
+//
+// Add Hapi register function.
+//
+Session.register = require('./lib/hapi');
 

@@ -1,32 +1,25 @@
 {
   "name": "session-handler",
-  "description": "A simple session and cookie handler",
-  "version": "0.0.6",
-  "author": {
-    "name": "Patrik Ring",
-    "email": "me@patrikring.se"
+  "version": "1.0.0",
+  "description": "Bloglovin sessions.",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/.bin/istanbul test ./node_modules/.bin/_mocha -- -R spec -u tdd"
   },
-  "private": true,
   "keywords": [
-    "sessions",
-    "session",
-    "cookies"
+    "hapi",
+    "bloglovin",
+    "session"
   ],
+  "author": "Bloglovin <dev@bloglovin.com>",
+  "license": "MIT",
   "dependencies": {
-    "uuid": ">=1.4.1"
+    "uuid": "~1.4.1"
   },
   "devDependencies": {
-    "mocha": "0.3.x"
-  },
-  "main": "./index.js",
-  "engines": {
-    "node": ">=0.6.19"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/bloglovin/node-sessions.git"
-  },
-  "homepage": "http://www.bloglovin.com",
-  "readmeFilename": "README.md",
-  "_id": "session-handler@0.0.1"
+    "async": "~0.2.9",
+    "istanbul": "~0.2.3",
+    "mocha": "~1.17.0"
+  }
 }
+
