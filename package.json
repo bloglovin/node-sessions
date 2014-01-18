@@ -19,7 +19,7 @@
   "devDependencies": {
     "async": "~0.2.9",
     "istanbul": "~0.2.3",
-    "mocha": "~1.17.0"
+    "mocha": "~1.17.0",
+    "hapi": "~2.0.0"
   }
 }
-
