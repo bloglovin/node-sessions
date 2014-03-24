@@ -304,7 +304,7 @@ function mockMC() {
       else if (key === '2::new') {
         val = false;
       }
-      else if (key === '2::sess') {
+      else if (key === 'sess') {
         val = {
           'foo': 'bar'
         };
