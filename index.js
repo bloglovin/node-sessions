@@ -76,7 +76,7 @@ Session.prototype.start = function start(cookies, create, next) {
   }
 
   var self = this;
-  this.sessionID = this.version + '::' + session;
+  this.sessionID = session;
   this.mc.get(this.sessionID, function sessionLoadCallback(sess) {
     if (!sess && !create) {
       next(new Error('No session found.'));
