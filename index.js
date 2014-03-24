@@ -35,6 +35,7 @@ var Session = module.exports = function Session(mc, opts) {
 
   this.mc            = mc;
   this.sessionID     = null;
+  this.sessionNoPref = null;
   this.data          = {};
   this.changed       = false;
   this.version       = opts.version || 2;
@@ -76,7 +77,8 @@ Session.prototype.start = function start(cookies, create, next) {
   }
 
   var self = this;
-  this.sessionID = session;
+  this.sessionNoPref = session;
+  this.sessionID = this.version + '::' + session;
   this.mc.get(this.sessionID, function sessionLoadCallback(sess) {
     if (!sess && !create) {
       next(new Error('No session found.'));
@@ -101,8 +103,9 @@ Session.prototype.start = function start(cookies, create, next) {
 // * **next**, optional callback passed to `.save()` if `autoSave` is enabled.
 //
 Session.prototype.create = function create(next) {
-  this.sessionID = this.version + '::' + uuid.v1() + uuid.v4();
-  this.cookieSetter(this._prefixCookie('session'), this.sessionID);
+  this.sessionNoPref = uuid.v1() + uuid.v4();
+  this.sessionID = this.version + '::' + this.sessionNoPref;
+  this.cookieSetter(this._prefixCookie('session'), this.sessionNoPref);
   this.changed = true;
   if (this.autoSave) {
     this.save(next);
