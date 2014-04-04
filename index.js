@@ -126,7 +126,7 @@ Session.prototype.save = function save(next) {
   var self = this;
   var callback = this._mcNext(true, function (err, response) {
     if (!err) self.changed = false;
-    next(err, response);
+    if (next) next(err, response);
   });
   this.mc.set(this.sessionID, this.data, this.sessionTTL, callback);
 };
