@@ -200,12 +200,12 @@ Session.prototype.get = function get(key, def) {
 //
 // * **key**, the name of the item to set.
 // * **value**, the value to set.
-// * **next**, optional callback passed to `.save()` if `autoSave` is enabled.
+// * **next**, optional callback, if passed session will be saved on the spot.
 //
 Session.prototype.set = function set(key, value, next) {
   this.data[key] = value;
   this.changed = true;
-  if (this.autoSave) {
+  if (this.autoSave || next) {
     this.save(next);
   }
 };
