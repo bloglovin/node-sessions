@@ -79,7 +79,7 @@ Session.prototype.start = function start(cookies, create, next) {
   var self = this;
   this.sessionNoPref = session;
   this.sessionID = this.version + '::' + session;
-  this.mc.get(this.sessionID, function sessionLoadCallback(sess) {
+  this.mc.get(this.sessionID, function sessionLoadCallback(err, sess) {
     if (!sess && !create) {
       next(new Error('No session found.'));
       return;
@@ -89,7 +89,12 @@ Session.prototype.start = function start(cookies, create, next) {
       return;
     }
 
-    self.data = sess;
+    try {
+      self.data = JSON.parse(sess);
+    }
+    catch (error) {
+      return next(error);
+    }
     next(null);
   });
 };
