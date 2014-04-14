@@ -141,7 +141,7 @@ Session.prototype.save = function save(next) {
     if (!err) self.changed = false;
     if (next) next(err, response);
   });
-  this.mc.set(this.sessionID, this.data, this.sessionTTL, callback);
+  this.mc.set(this.sessionID, JSON.stringify(this.data), this.sessionTTL, callback);
 };
 
 //
