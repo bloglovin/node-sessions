@@ -128,6 +128,14 @@ Session.prototype.create = function create(next) {
 // * **next**, function called when done or on error.
 //
 Session.prototype.save = function save(next) {
+  // Can't save if we don't have an ID.
+  // This should probably be an error, but it's not due to backwards
+  // compatibility reasons.
+  if (!this.sessionID) {
+    if (next) next();
+    return;
+  }
+
   var self = this;
   var callback = this._mcNext(true, function (err, response) {
     if (!err) self.changed = false;
